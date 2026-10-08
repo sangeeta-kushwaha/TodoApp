@@ -9,19 +9,40 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState({});
   const navigate = useNavigate();
+
+  const ValidationForm = () => {
+    const newErrors = {};
+
+    if (!email) {
+      newErrors.email = "Email is Required.";
+    }
+    if (!password) {
+      newErrors.password = "Password is Required.";
+    }
+
+    setError(newErrors);
+
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const isValid = ValidationForm();
+
+    if (!isValid) {
+      return;
+    }
     setLoading(true);
     try {
       const response = await api.post("/auth/login", { email, password });
       localStorage.setItem("AppAuthtoken", response.data.token);
-      toast.success("Login successful");
+      toast.success(response?.data?.message || "Login successful");
       navigate("/home");
     } catch (error) {
-      toast.error("Login failed");
-      console.error("Login failed:", error);
+      toast.error(error.response?.data?.message || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -53,12 +74,14 @@ const Login = () => {
               <input
                 id="email"
                 type="email"
-                required
                 placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
+              {error.email && (
+                <p className="text-red-500 text-sm px-3">{error.email}</p>
+              )}
             </div>
           </div>
 
@@ -74,12 +97,14 @@ const Login = () => {
               <input
                 id="password"
                 type={showPassword ? "text" : "password"}
-                required
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-10 pr-11 py-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
+              {error.password && (
+                <p className="text-red-500 text-sm px-3">{error.password}</p>
+              )}
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}

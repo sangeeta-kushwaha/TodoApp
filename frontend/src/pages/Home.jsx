@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import toast from "react-hot-toast";
+import LogoutBtn from "../components/Button";
 
 import MyTodos from "../components/MyTodos";
 import api from "../services/api";
@@ -9,11 +10,27 @@ const Home = () => {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [error, setError] = useState({});
+
+  const ValidationForm = () => {
+    const newErrors = {};
+    if (!title.trim()) {
+      newErrors.title = "Title is Required.";
+    }
+    if (!description.trim()) {
+      newErrors.description = "Description is Required.";
+    }
+
+    setError(newErrors);
+
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleAddTodo = async (e) => {
     e.preventDefault();
-    if (!title.trim() || !description.trim()) {
-      toast.error("Please fill in both title and description");
+    const isValid = ValidationForm();
+
+    if (!isValid) {
       return;
     }
 
@@ -46,6 +63,9 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 px-4 py-8 sm:py-12">
+      <div className="flex justify-end">
+        <LogoutBtn />
+      </div>
       <div className="mx-auto w-full max-w-4xl">
         <div className="text-center mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">
@@ -59,21 +79,32 @@ const Home = () => {
             onSubmit={handleAddTodo}
             className="flex flex-col md:flex-row gap-3 mb-6"
           >
-            <input
-              className="w-full md:flex-1 px-4 py-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Task title"
-            />
+            <div className="w-full md:flex-1">
+              <input
+                className="w-full md:flex-1 px-4 py-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Task title"
+              />
+              {error.title && (
+                <p className="text-red-500 text-sm px-3">{error.title}</p>
+              )}
+            </div>
 
-            <input
-              className="w-full md:flex-[2] px-4 py-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Description"
-            />
+            <div className="w-full md:flex-1">
+              <input
+                className="w-full md:flex-[2] px-4 py-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                type="text"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Description"
+              />
+
+              {error.description && (
+                <p className="text-red-500 text-sm px-3">{error.description}</p>
+              )}
+            </div>
 
             <button
               type="submit"

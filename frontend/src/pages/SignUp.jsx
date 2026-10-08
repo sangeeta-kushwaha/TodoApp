@@ -1,6 +1,13 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FiUser, FiMail, FiLock, FiEye, FiEyeOff, FiUserPlus } from "react-icons/fi";
+import {
+  FiUser,
+  FiMail,
+  FiLock,
+  FiEye,
+  FiEyeOff,
+  FiUserPlus,
+} from "react-icons/fi";
 import api from "../services/api";
 import toast from "react-hot-toast";
 
@@ -10,10 +17,38 @@ const SignUp = () => {
   const [fullName, setFullName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState({});
   const navigate = useNavigate();
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!fullName.trim()) {
+      newErrors.fullName = "Name is required.";
+    }
+
+    if (!email.trim()) {
+      newErrors.email = "Email is required.";
+    }
+
+    if (!password.trim()) {
+      newErrors.password = "Password is required.";
+    }
+
+    setError(newErrors);
+
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSignUp = async (e) => {
     e.preventDefault();
+
+    const isValid = validateForm();
+
+    if (!isValid) {
+      return;
+    }
+
     setLoading(true);
     try {
       await api.post("/auth/signup", {
@@ -57,12 +92,14 @@ const SignUp = () => {
               <input
                 id="fullName"
                 type="text"
-                required
                 placeholder="Enter your full name"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
+              {error.fullName && (
+                <p className="text-red-500 text-sm px-3">{error.fullName}</p>
+              )}
             </div>
           </div>
 
@@ -78,12 +115,15 @@ const SignUp = () => {
               <input
                 id="email"
                 type="email"
-                required
                 placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
+
+              {error.email && (
+                <p className="text-red-500 text-sm px-3">{error.email}</p>
+              )}
             </div>
           </div>
 
@@ -99,12 +139,14 @@ const SignUp = () => {
               <input
                 id="password"
                 type={showPassword ? "text" : "password"}
-                required
                 placeholder="Create a password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-10 pr-11 py-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
+              {error.password && (
+                <p className="text-red-500 text-sm px-3 ">{error.password}</p>
+              )}
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}

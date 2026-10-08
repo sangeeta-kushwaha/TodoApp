@@ -19,6 +19,30 @@ const MyTodos = ({ todos, setTodos }) => {
     }
   };
 
+  const handleCompleteTodo = async (todo) => {
+    const token = localStorage.getItem("AppAuthtoken");
+
+    try {
+      const response = await api.put(
+        `/todo/${todo._id}`,
+        {
+          completed: !todo.completed,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      setTodos((prev) =>
+        prev.map((item) => (item._id === todo._id ? response.data.data : item)),
+      );
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
   const handleDeleteTodo = async (id) => {
     try {
       await api.delete(`/todo/${id}`, {
@@ -61,16 +85,29 @@ const MyTodos = ({ todos, setTodos }) => {
             className="flex items-start justify-between gap-3 bg-gray-50 border border-gray-200 border-l-4 border-l-indigo-500 p-4 rounded-lg hover:shadow-md transition"
           >
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-gray-900 break-words">
+              <p
+                className={`font-semibold break-words ${
+                  todo.completed
+                    ? "text-gray-400 line-through"
+                    : "text-gray-900"
+                }`}
+              >
                 {todo.title}
               </p>
-              <p className="text-sm text-gray-600 mt-1 break-words">
+              <p
+                className={`text-sm mt-1 break-words ${
+                  todo.completed
+                    ? "text-gray-400 line-through"
+                    : "text-gray-600"
+                }`}
+              >
                 {todo.description}
               </p>
             </div>
             <div className="flex gap-2 shrink-0">
               <button
-                title="Mark as done"
+                title={todo.completed ? "Mark as pending" : "Mark as done"}
+                onClick={() => handleCompleteTodo(todo)}
                 className="p-2 rounded-lg bg-green-100 text-green-600 hover:bg-green-500 hover:text-white transition"
               >
                 <FaCheck />
