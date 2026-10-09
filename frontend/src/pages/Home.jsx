@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import LogoutBtn from "../components/Button";
 
@@ -11,6 +11,20 @@ const Home = () => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState({});
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const getMe = async () => {
+      try {
+        const response = await api.get("/auth/me");
+        setUser(response?.data?.user);
+      } catch (err) {
+        toast.error(err?.response?.data?.message || "Failed to get user");
+        console.log(err);
+      }
+    };
+    getMe();
+  }, []);
 
   const ValidationForm = () => {
     const newErrors = {};
@@ -35,20 +49,10 @@ const Home = () => {
     }
 
     try {
-      const token = localStorage.getItem("AppAuthtoken");
-
-      const response = await api.post(
-        "/todo",
-        {
-          title,
-          description,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const response = await api.post("/todo", {
+        title,
+        description,
+      });
 
       setTitle("");
       setDescription("");
@@ -63,7 +67,17 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 px-4 py-8 sm:py-12">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-3">
+        {user && (
+          <div className="flex items-center gap-2">
+            <div 
+             className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 font-semibold">
+              {user.name.charAt(0).toUpperCase()}
+              
+            </div>
+           
+          </div>
+        )}
         <LogoutBtn />
       </div>
       <div className="mx-auto w-full max-w-4xl">
@@ -71,7 +85,9 @@ const Home = () => {
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">
             My Todo App
           </h1>
-          <p className="text-gray-500 mt-2">Manage your tasks here</p>
+          <p className="text-gray-500 mt-2">Welcome {user?.name || "Guest"}</p>
+          <p className="text-gray-500 mt-2">Manage your tasks here {user?.email}</p>
+
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">

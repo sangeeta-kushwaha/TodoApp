@@ -17,10 +17,16 @@ const Login = () => {
 
     if (!email) {
       newErrors.email = "Email is Required.";
+    }else if(!email.trim().includes("@")){
+      newErrors.email = "Invalid email address.";
     }
+   
     if (!password) {
       newErrors.password = "Password is Required.";
+    }else if(password.trim().length < 6){
+      newErrors.password = "Password must be at least 6 characters long.";
     }
+   
 
     setError(newErrors);
 

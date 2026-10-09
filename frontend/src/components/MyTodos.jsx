@@ -1,59 +1,101 @@
 import { FaCheck } from "react-icons/fa";
 import { RxCross1 } from "react-icons/rx";
+import { FiEdit2 } from "react-icons/fi";
 import api from "../services/api";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 const MyTodos = ({ todos, setTodos }) => {
-  const token = localStorage.getItem("AppAuthtoken");
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [saving, setSaving] = useState(false);
 
+
+
+  
   const getTodos = async () => {
     try {
-      const response = await api.get("/todo", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await api.get("/todo");
       setTodos(response.data.data);
+      toast.success(response.data.message || "succefully load data");
     } catch (err) {
-      console.log(err);
+      toast.error(err.response.data.message);
     }
   };
 
   const handleCompleteTodo = async (todo) => {
-    const token = localStorage.getItem("AppAuthtoken");
-
     try {
-      const response = await api.put(
-        `/todo/${todo._id}`,
-        {
-          completed: !todo.completed,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const response = await api.put(`/todo/${todo._id}`, {
+        completed: !todo.completed,
+      });
 
       setTodos((prev) =>
         prev.map((item) => (item._id === todo._id ? response.data.data : item)),
       );
+      toast.success(response.data.message || "Task Successfully Updated");
     } catch (err) {
-      console.log(err);
+      toast.error(err.response.data.message);
     }
   };
 
   const handleDeleteTodo = async (id) => {
+
+    const isConfirmed = window.confirm("Are you sure you want to delete this task?");
+    if (!isConfirmed) return;
+
     try {
-      await api.delete(`/todo/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await api.delete(`/todo/${id}`);
 
       setTodos((prevTodo) => prevTodo.filter((todo) => todo._id !== id));
+      toast.success(response?.data?.message || "Successfully Task Deleted.");
     } catch (err) {
-      console.log(err);
+      toast.error(err?.response?.data?.message);
+    }
+  };
+
+  const startEdit = (todo) => {
+    setEditingId(todo._id);
+    setEditTitle(todo.title);
+    setEditDescription(todo.description);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditTitle("");
+    setEditDescription("");
+  };
+
+  const handleUpdateTodo = async (todo) => {
+    const title = editTitle.trim();
+    const description = editDescription.trim();
+
+    if (title.length < 3 || description.length < 3) {
+      toast.error("Title and description must be at least 3 characters");
+      return;
+    }
+
+    if (title === todo.title && description === todo.description) {
+      cancelEdit();
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await api.put(`/todo/${todo._id}`, {
+        title,
+        description,
+      });
+
+      setTodos((prev) =>
+        prev.map((item) => (item._id === todo._id ? response.data.data : item)),
+      );
+      toast.success(response?.data?.message || "Task Successfully Updated");
+      cancelEdit();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to update task");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -85,26 +127,79 @@ const MyTodos = ({ todos, setTodos }) => {
             className="flex items-start justify-between gap-3 bg-gray-50 border border-gray-200 border-l-4 border-l-indigo-500 p-4 rounded-lg hover:shadow-md transition"
           >
             <div className="min-w-0 flex-1">
-              <p
-                className={`font-semibold break-words ${
-                  todo.completed
-                    ? "text-gray-400 line-through"
-                    : "text-gray-900"
-                }`}
-              >
-                {todo.title}
-              </p>
-              <p
-                className={`text-sm mt-1 break-words ${
-                  todo.completed
-                    ? "text-gray-400 line-through"
-                    : "text-gray-600"
-                }`}
-              >
-                {todo.description}
-              </p>
+              {editingId === todo._id ? (
+                <div className="space-y-2">
+                  <input
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleUpdateTodo(todo);
+                      if (e.key === "Escape") cancelEdit();
+                    }}
+                    placeholder="Title"
+                    autoFocus
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  <textarea
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") cancelEdit();
+                    }}
+                    placeholder="Description"
+                    rows={2}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleUpdateTodo(todo)}
+                      disabled={saving}
+                      className="px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition"
+                    >
+                      {saving ? "Saving..." : "Save"}
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      disabled={saving}
+                      className="px-3 py-1.5 text-sm rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p
+                    className={`font-semibold break-words ${
+                      todo.completed
+                        ? "text-gray-400 line-through"
+                        : "text-gray-900"
+                    }`}
+                  >
+                    {todo.title}
+                  </p>
+                  <p
+                    className={`text-sm mt-1 break-words ${
+                      todo.completed
+                        ? "text-gray-400 line-through"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    {todo.description}
+                  </p>
+                </>
+              )}
             </div>
             <div className="flex gap-2 shrink-0">
+              {editingId !== todo._id && (
+                <button
+                  title="Edit"
+                  onClick={() => startEdit(todo)}
+                  className="p-2 rounded-lg bg-indigo-100 text-indigo-600 hover:bg-indigo-500 hover:text-white transition"
+                >
+                  <FiEdit2 />
+                </button>
+              )}
               <button
                 title={todo.completed ? "Mark as pending" : "Mark as done"}
                 onClick={() => handleCompleteTodo(todo)}

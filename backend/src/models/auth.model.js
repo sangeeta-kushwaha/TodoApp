@@ -10,10 +10,17 @@ const UserSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
+      lowercase: true,
+      trim: true,
     },
     password: {
       type: String,
       required: true,
+    },
+    refreshToken: {
+      type: String,
+      required: true,
+      default: null,
     },
   },
   {

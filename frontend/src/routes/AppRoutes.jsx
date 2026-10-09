@@ -2,7 +2,7 @@ import React from "react";
 import {
   BrowserRouter,
   Navigate,
-  replace,
+  replace,  
   Route,
   Routes,
 } from "react-router-dom";
@@ -10,6 +10,7 @@ import Home from "../pages/Home";
 import Login from "../pages/Login";
 import SignUp from "../pages/SignUp";
 import ProtectedRoute from "../components/ProtectedRoute";
+import PublicRoute from "../components/PublicRoute";
 
 const AppRoutes = () => {
   return (
@@ -18,8 +19,8 @@ const AppRoutes = () => {
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
 
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<SignUp />} />
+          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/signup" element={<PublicRoute><SignUp /></PublicRoute>} />
           <Route
             path="/home"
             element={

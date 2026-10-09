@@ -29,10 +29,15 @@ const SignUp = () => {
 
     if (!email.trim()) {
       newErrors.email = "Email is required.";
+    }else if(!email.trim().includes("@")){
+      newErrors.email = "Invalid email address.";
     }
+    
 
     if (!password.trim()) {
       newErrors.password = "Password is required.";
+    }else if(password.trim().length < 6){
+      newErrors.password = "Password must be at least 6 characters long.";
     }
 
     setError(newErrors);
@@ -59,8 +64,7 @@ const SignUp = () => {
       toast.success("Signup successful");
       navigate("/login");
     } catch (error) {
-      console.log(error);
-      toast.error("Signup failed");
+      toast.error(error?.response?.data?.message || "Signup failed");
     } finally {
       setLoading(false);
     }

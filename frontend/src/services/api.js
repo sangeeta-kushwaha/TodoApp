@@ -1,5 +1,4 @@
 import axios from "axios";
-import { Navigate } from "react-router-dom";
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
 });
@@ -13,9 +12,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.this.status === 401) {
+    if (err.response?.status === 401) {
       localStorage.removeItem("AppAuthtoken");
-      <Navigate to="/login" />;
+      window.location.href = "/login";
     }
     return Promise.reject(err);
   },
