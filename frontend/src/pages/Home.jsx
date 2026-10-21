@@ -1,140 +1,197 @@
-import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { FiAlertCircle, FiCheckCircle, FiClock, FiList } from "react-icons/fi";
+import { useState } from "react";
 import toast from "react-hot-toast";
-import LogoutBtn from "../components/Button";
+import TaskCard from "../components/tasks/TaskCard";
+import TaskForm from "../components/tasks/TaskForm";
+import Button from "../components/ui/Button";
+import { buttonClass } from "../components/ui/buttonStyles";
+import EmptyState from "../components/ui/EmptyState";
+import Modal from "../components/ui/Modal";
+import { StatSkeleton, TaskListSkeleton } from "../components/ui/Skeleton";
+import StatCard from "../components/ui/StatCard";
+import { useAuth } from "../context/AuthContext";
+import { useTasks } from "../context/TasksContext";
+import { getErrorMessage } from "../utils/errors";
 
-import MyTodos from "../components/MyTodos";
-import api from "../services/api";
+export default function Home() {
+  const { user } = useAuth();
+  const { stats, recent, loading, error, reload, updateTodo, deleteTodo } = useTasks();
+  const [editing, setEditing] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const firstName = user?.name?.split(" ")[0] || "there";
 
-const Home = () => {
-  const [todos, setTodos] = useState([]);
-
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [error, setError] = useState({});
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const getMe = async () => {
-      try {
-        const response = await api.get("/auth/me");
-        setUser(response?.data?.user);
-      } catch (err) {
-        toast.error(err?.response?.data?.message || "Failed to get user");
-        console.log(err);
-      }
-    };
-    getMe();
-  }, []);
-
-  const ValidationForm = () => {
-    const newErrors = {};
-    if (!title.trim()) {
-      newErrors.title = "Title is Required.";
+  const saveEdit = async (payload) => {
+    if (!editing || saving) return;
+    setSaving(true);
+    try {
+      await updateTodo(editing._id, payload);
+      toast.success("Task updated");
+      setEditing(null);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to update task"));
+    } finally {
+      setSaving(false);
     }
-    if (!description.trim()) {
-      newErrors.description = "Description is Required.";
-    }
-
-    setError(newErrors);
-
-    return Object.keys(newErrors).length === 0;
   };
 
-  const handleAddTodo = async (e) => {
-    e.preventDefault();
-    const isValid = ValidationForm();
-
-    if (!isValid) {
-      return;
-    }
-
+  const confirmDelete = async () => {
+    if (!deleting || saving) return;
+    setSaving(true);
     try {
-      const response = await api.post("/todo", {
-        title,
-        description,
-      });
-
-      setTitle("");
-      setDescription("");
-
-      setTodos((prevTodos) => [...prevTodos, response.data.data]);
-      toast.success("Task added");
+      await deleteTodo(deleting._id);
+      toast.success("Task deleted");
+      setDeleting(null);
     } catch (err) {
-      toast.error("Failed to add task");
-      console.log(err);
+      toast.error(getErrorMessage(err, "Failed to delete task"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const changeStatus = async (todo, status) => {
+    if (todo.status === status) return;
+    try {
+      await updateTodo(todo._id, { status });
+      toast.success("Status updated");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to update status"));
+    }
+  };
+
+  const toggleComplete = async (todo) => {
+    try {
+      await updateTodo(todo._id, { completed: !todo.completed });
+      toast.success(todo.completed ? "Marked as pending" : "Marked as completed");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to update task"));
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 px-4 py-8 sm:py-12">
-      <div className="flex items-center justify-end gap-3">
-        {user && (
-          <div className="flex items-center gap-2">
-            <div 
-             className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 font-semibold">
-              {user.name.charAt(0).toUpperCase()}
-              
-            </div>
-           
+    <div className="space-y-6">
+      <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-accent-text">Hello, {firstName}</p>
+          <p className="mt-1 max-w-xl text-sm text-muted">
+            These counts include every saved task. Pending means anything that
+            is not completed. Open a card to see that list.
+          </p>
+        </div>
+        <Link to="/tasks/new" className={buttonClass("primary")}>
+          Add task
+        </Link>
+      </section>
+
+      {loading ? (
+        <StatSkeleton />
+      ) : error ? null : (
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard to="/tasks" label="Total tasks" value={stats.total} hint="Everything you have saved" icon={FiList} />
+          <StatCard to="/tasks?status=completed" label="Completed" value={stats.completed} hint="Marked done" icon={FiCheckCircle} />
+          <StatCard
+            to="/tasks?status=open"
+            label="Pending"
+            value={stats.pending}
+            hint={
+              stats.inProgress
+                ? `${stats.inProgress} in progress`
+                : "Not completed"
+            }
+            icon={FiClock}
+          />
+          <StatCard to="/tasks?status=overdue" label="Overdue" value={stats.overdue} hint="Due before today and still open" icon={FiAlertCircle} />
+        </section>
+      )}
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Recent tasks</h2>
+          <Link to="/tasks" className="text-sm font-semibold text-accent-text">
+            View all
+          </Link>
+        </div>
+
+        {loading ? <TaskListSkeleton /> : null}
+        {!loading && error ? (
+          <div role="alert" className="rounded-2xl border border-line bg-surface p-8 text-center">
+            <p className="font-semibold">Could not load tasks</p>
+            <p className="mt-1 text-sm text-muted">{error}</p>
+            <Button className="mt-4" onClick={reload}>
+              Try again
+            </Button>
           </div>
-        )}
-        <LogoutBtn />
-      </div>
-      <div className="mx-auto w-full max-w-4xl">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">
-            My Todo App
-          </h1>
-          <p className="text-gray-500 mt-2">Welcome {user?.name || "Guest"}</p>
-          <p className="text-gray-500 mt-2">Manage your tasks here {user?.email}</p>
-
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
-          <form
-            onSubmit={handleAddTodo}
-            className="flex flex-col md:flex-row gap-3 mb-6"
-          >
-            <div className="w-full md:flex-1">
-              <input
-                className="w-full md:flex-1 px-4 py-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Task title"
+        ) : null}
+        {!loading && !error && recent.length === 0 ? (
+          <EmptyState
+            title="No tasks yet"
+            description="Add a task with a priority and due date. It will show up here and in My Todos."
+            action={
+              <Link to="/tasks/new" className={buttonClass("primary")}>
+                Add your first task
+              </Link>
+            }
+          />
+        ) : null}
+        {!loading && !error
+          ? recent.map((todo) => (
+              <TaskCard
+                key={todo._id}
+                todo={todo}
+                compact
+                onToggle={toggleComplete}
+                onStatus={changeStatus}
+                onEdit={setEditing}
+                onDelete={setDeleting}
               />
-              {error.title && (
-                <p className="text-red-500 text-sm px-3">{error.title}</p>
-              )}
-            </div>
+            ))
+          : null}
+      </section>
 
-            <div className="w-full md:flex-1">
-              <input
-                className="w-full md:flex-[2] px-4 py-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                type="text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Description"
-              />
+      <Modal
+        open={Boolean(editing)}
+        title="Edit task"
+        description="Update the details, then save. Changes are stored in your account."
+        onClose={() => {
+          if (!saving) setEditing(null);
+        }}
+      >
+        {editing ? (
+          <div className="mt-4">
+            <TaskForm
+              key={editing._id}
+              initialTask={editing}
+              submitLabel="Save changes"
+              loading={saving}
+              onSubmit={saveEdit}
+              onCancel={() => setEditing(null)}
+            />
+          </div>
+        ) : null}
+      </Modal>
 
-              {error.description && (
-                <p className="text-red-500 text-sm px-3">{error.description}</p>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              className="w-full md:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition whitespace-nowrap"
-            >
-              Add Task
-            </button>
-          </form>
-
-          <MyTodos todos={todos} setTodos={setTodos} />
+      <Modal
+        open={Boolean(deleting)}
+        title="Delete this task?"
+        description={
+          deleting
+            ? `"${deleting.title}" will be removed from your list. This cannot be undone.`
+            : ""
+        }
+        onClose={() => {
+          if (!saving) setDeleting(null);
+        }}
+      >
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setDeleting(null)} disabled={saving}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={confirmDelete} disabled={saving}>
+            {saving ? "Deleting…" : "Delete task"}
+          </Button>
         </div>
-      </div>
+      </Modal>
     </div>
   );
-};
-
-export default Home;
+}

@@ -1,38 +1,48 @@
-import React from "react";
-import {
-  BrowserRouter,
-  Navigate,
-  replace,  
-  Route,
-  Routes,
-} from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
+import AppShell from "../components/layout/AppShell";
+import ProtectedRoute from "../components/ProtectedRoute";
+import PublicRoute from "../components/PublicRoute";
+import { TasksProvider } from "../context/TasksContext";
+import AddTaskPage from "../pages/AddTaskPage";
 import Home from "../pages/Home";
 import Login from "../pages/Login";
 import SignUp from "../pages/SignUp";
-import ProtectedRoute from "../components/ProtectedRoute";
-import PublicRoute from "../components/PublicRoute";
+import TasksPage from "../pages/TasksPage";
 
-const AppRoutes = () => {
+export default function AppRoutes() {
   return (
-    <>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Navigate to="/home" replace />} />
-
-          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-          <Route path="/signup" element={<PublicRoute><SignUp /></PublicRoute>} />
-          <Route
-            path="/home"
-            element={
-              <ProtectedRoute>
-                <Home />
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </BrowserRouter>
-    </>
+    <Routes>
+      <Route path="/" element={<Navigate to="/home" replace />} />
+      <Route
+        path="/login"
+        element={
+          <PublicRoute>
+            <Login />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/signup"
+        element={
+          <PublicRoute>
+            <SignUp />
+          </PublicRoute>
+        }
+      />
+      <Route
+        element={
+          <ProtectedRoute>
+            <TasksProvider>
+              <AppShell />
+            </TasksProvider>
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/home" element={<Home />} />
+        <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/tasks/new" element={<AddTaskPage />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/home" replace />} />
+    </Routes>
   );
-};
-
-export default AppRoutes;
+}

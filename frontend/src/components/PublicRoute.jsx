@@ -1,12 +1,11 @@
-import React from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate } from "react-router-dom";
+import FullPageLoader from "./ui/Skeleton";
+import { useAuth } from "../context/AuthContext";
 
-const PublicRoute = ({children}) => {
-    const token = localStorage.getItem("AppAuthtoken");
-    if(token){
-        return <Navigate to="/home" replace />
-    }
+export default function PublicRoute({ children }) {
+  const { user, loading } = useAuth();
+
+  if (loading) return <FullPageLoader />;
+  if (user) return <Navigate to="/home" replace />;
   return children;
 }
-
-export default PublicRoute

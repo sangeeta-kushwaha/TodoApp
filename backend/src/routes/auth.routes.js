@@ -1,17 +1,37 @@
 import { Router } from "express";
 import {
-  validateLogin,
-  validateSignup,
-} from "../middleware/auth.middleware.js";
-import { login, signup, getMe } from "../controllers/auth.controller.js";
-import authmiddleware from "../middleware/profileAuth.middleware.js";
+  getMe,
+  login,
+  logout,
+  refreshToken,
+  signup,
+} from "../controllers/auth.controller.js";
+import { validateLogin, validateSignup } from "../middleware/auth.middleware.js";
+import { csrfProtection } from "../middleware/csrf.middleware.js";
+import { rateLimit } from "../middleware/rateLimit.middleware.js";
+import requireAuth from "../middleware/requireAuth.middleware.js";
 
 const router = Router();
 
-router.post("/signup", validateSignup, signup);
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyPrefix: "auth",
+});
 
-router.post("/login", validateLogin, login);
+function csrfForRefresh(req, res, next) {
+  const refreshCookie = req.cookies?.refreshToken;
+  const refreshBody = req.body?.refreshToken;
+  if (!refreshCookie && typeof refreshBody === "string" && refreshBody) {
+    return next();
+  }
+  return csrfProtection(req, res, next);
+}
 
-router.get("/me", authmiddleware, getMe);
+router.post("/signup", authLimiter, validateSignup, signup);
+router.post("/login", authLimiter, validateLogin, login);
+router.get("/me", requireAuth, getMe);
+router.post("/refresh", authLimiter, csrfForRefresh, refreshToken);
+router.post("/logout", csrfProtection, logout);
 
 export default router;
