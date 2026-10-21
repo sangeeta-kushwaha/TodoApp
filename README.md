@@ -1,70 +1,145 @@
 # Taskboard
 
-Taskboard is a personal task manager. You sign up, log in, and manage only your own tasks. Each task has a title, description, priority, status, and optional due date.
+Taskboard is a personal task manager. A person signs up, logs in, and works only with their own tasks. A task has a title, description, priority, status, and an optional due date.
 
-This repository keeps the React frontend and the Express API in separate folders. The browser never stores access or refresh tokens in `localStorage`.
+The repository is two apps in one folder:
 
-## Features
+- `frontend` is the React site. In development it runs at `http://localhost:5173`.
+- `backend` is the Express API. In development it runs at `http://localhost:8080`.
 
-- Sign up, log in, log out, and restore a session after refresh
-- Create, read, update, and delete tasks
-- Mark a task complete or incomplete
-- Priority: Low, Medium, High
-- Status: Pending, In Progress, Completed
-- Due dates, with an overdue badge for open tasks whose due date is before today
-- Dashboard counts calculated from the signed-in user's tasks
-- Search, status filter, priority filter, sorting, and server-side pagination
-- Field validation, loading skeletons, empty and error states, toasts, and a delete confirmation
-- Light and dark mode
-- Users can only read or change their own tasks
+The browser never talks to MongoDB. It only talks to the API. The API is the only part that reads and writes the database.
 
-## Tech stack
+## What a person can do
 
-- Frontend: React, Vite, Tailwind CSS, React Router, Axios
-- Backend: Node.js, Express, MongoDB, Mongoose
-- Auth: bcrypt password hashes, JWT access and refresh tokens in HttpOnly cookies
-- Validation: Zod
+- Sign up, log in, log out, and stay signed in after a refresh
+- Create, edit, complete, and delete tasks
+- Set priority to Low, Medium, or High
+- Set status to Pending, In Progress, or Completed
+- Add a due date, and see an overdue badge when an open task is past that date
+- See dashboard counts for every saved task, plus the five newest tasks
+- Search, filter, sort, and page through tasks
+- Switch between light and dark mode
 
-## Architecture
+Search, filters, sorting, and pages happen in MongoDB. The browser asks for one page at a time. It does not download the whole list and then filter it.
 
-The React app is a single-page application. Protected pages sit inside one shell: a sidebar on desktop, a menu button on small screens, and a header with the page title, theme toggle, profile, and log out.
+## How the pieces connect
 
-`AuthContext` asks the API who the current user is. `TasksContext` loads dashboard counts and the five newest tasks. The task list asks the API for one page at a time. Pages do not call Axios directly.
+```text
+Browser (React, port 5173)
+        |
+        |  /api/...   cookies go with the request
+        v
+Vite dev server proxies /api to port 8080
+        |
+        v
+Express (backend/src/app.js)
+        |
+        |  routes → middleware → controller → model
+        v
+MongoDB collections: users, todos
+```
 
-The Express app is created in `backend/src/app.js`. `backend/server.js` loads environment variables, checks the JWT secrets, connects to MongoDB, and starts listening. Tests import the app without starting the server or touching your development database.
+During `npm run dev`, Vite forwards any path that starts with `/api` to `http://localhost:8080`. The browser still thinks it is talking to `localhost:5173`. That single address is why the login cookies are allowed to stick.
+
+## Folder map
 
 ```text
 authapp/
 ├── backend/
-│   ├── server.js
+│   ├── server.js                     checks secrets, connects MongoDB, listens
 │   ├── src/
-│   │   ├── app.js
-│   │   ├── config/db.js
-│   │   ├── constants/tasks.js
-│   │   ├── controllers/
-│   │   ├── middleware/
+│   │   ├── app.js                    builds Express and mounts /api/auth and /api/todo
+│   │   ├── config/db.js              opens the MongoDB connection
+│   │   ├── constants/tasks.js        allowed priority, status, and page size
 │   │   ├── models/
+│   │   │   ├── auth.model.js         users collection: name, email, password hash
+│   │   │   └── todo.model.js         todos collection: task fields and indexes
 │   │   ├── routes/
+│   │   │   ├── auth.routes.js        which URL runs which auth function
+│   │   │   └── todo.route.js         which URL runs which task function
+│   │   ├── controllers/
+│   │   │   ├── auth.controller.js    signup, login, me, refresh, logout
+│   │   │   └── todo.controller.js    create, list, stats, update, delete
+│   │   ├── middleware/
+│   │   │   ├── auth.middleware.js    checks signup and login bodies
+│   │   │   ├── todo.middleware.js    checks task bodies
+│   │   │   ├── requireAuth.middleware.js   reads the access cookie or Bearer token
+│   │   │   ├── csrf.middleware.js    checks X-CSRF-Token on cookie changes
+│   │   │   └── rateLimit.middleware.js     slows repeated login and signup
 │   │   └── utils/
-│   └── tests/
+│   │       ├── tokens.js             creates and checks JWTs
+│   │       ├── cookies.js            sets and clears the session cookies
+│   │       ├── dates.js              reads a due date
+│   │       └── taskQuery.js          turns ?status=&page= into a MongoDB query
+│   └── tests/                        API tests on a temporary in-memory database
 └── frontend/
-    ├── src/
-    │   ├── components/
-    │   ├── constants/
-    │   ├── context/
-    │   ├── pages/
-    │   ├── routes/
-    │   ├── services/api.js
-    │   └── utils/
-    └── vitest.config.js
+    └── src/
+        ├── main.jsx                  starts React
+        ├── App.jsx                   router, auth state, and toasts
+        ├── routes/AppRoutes.jsx      which URL shows which page
+        ├── pages/
+        │   ├── Login.jsx             /login
+        │   ├── SignUp.jsx            /signup
+        │   ├── Home.jsx              /home dashboard
+        │   ├── TasksPage.jsx         /tasks list
+        │   └── AddTaskPage.jsx       /tasks/new
+        ├── components/
+        │   ├── layout/               sidebar, header, page shell
+        │   ├── tasks/                task card, filters, form, pagination
+        │   └── ui/                   buttons, fields, modal, empty state, skeletons
+        ├── context/
+        │   ├── AuthContext.jsx       who is logged in
+        │   └── TasksContext.jsx      dashboard counts and five newest tasks
+        ├── hooks/useTaskList.js      one page of My Todos, driven by the URL
+        ├── services/api.js           every API call, cookies, and token refresh
+        ├── utils/                    form checks, task labels, URL query helpers
+        └── constants/tasks.js        labels for the filter dropdowns
 ```
 
-## Prerequisites
+A request always moves in one direction: page or hook, then `services/api.js`, then a route, then middleware, then a controller, then a model. Pages do not call Axios themselves, and controllers do not build cookies or query strings by hand when a util already does that.
 
-- Node.js 20 or newer
-- MongoDB running locally, or any MongoDB connection string
+## Pages
 
-## Installation
+| URL | Who can open it | What it shows |
+| --- | --- | --- |
+| `/` | anyone | Sends the browser to `/home`. |
+| `/login` | only signed-out people | Email and password. A signed-in person is sent to `/home`. |
+| `/signup` | only signed-out people | Name, email, and password. |
+| `/home` | signed-in people | Counts for every task, and the five newest tasks. Each count card opens the matching list. |
+| `/tasks` | signed-in people | One page of tasks. Search, status, priority, sort, and page live in the URL, so a refresh keeps the same list. |
+| `/tasks/new` | signed-in people | Form for a new task. After save, the app opens `/tasks`. |
+| anything else | anyone | Sends the browser to `/home`. |
+
+Signed-in pages share one frame from `components/layout/AppShell.jsx`: a sidebar on a wide screen, a menu button on a small screen, and a header with the page title, theme switch, and log out.
+
+## What happens when someone logs in
+
+1. `pages/Login.jsx` checks the form, then asks `AuthContext` to log in.
+2. `services/api.js` sends `POST /api/auth/login` to `/api`, and Vite forwards it to port 8080.
+3. `routes/auth.routes.js` runs the rate limit, then `middleware/auth.middleware.js` checks the body with Zod.
+4. `controllers/auth.controller.js` finds the user and compares the password with the bcrypt hash. A missing email and a wrong password return the same message.
+5. `utils/tokens.js` makes a 15-minute access token and a 7-day refresh token. Only a hash of the refresh token is saved on the user.
+6. `utils/cookies.js` stores both tokens in HttpOnly cookies. JavaScript on the page cannot read them. The response body contains the user, not the tokens.
+
+On the next visit, `AuthContext` calls `GET /api/auth/me`. If the access cookie has expired, `services/api.js` calls `POST /api/auth/refresh`, gets a new pair of cookies, and retries the original request. Using an old refresh token again logs that session out.
+
+## What happens when My Todos loads
+
+1. `routes/AppRoutes.jsx` only renders this page after `ProtectedRoute` confirms a session. `TasksProvider` is already loading dashboard counts beside it.
+2. `hooks/useTaskList.js` reads `q`, `status`, `priority`, `sort`, and `page` from the address bar.
+3. It calls `GET /api/todo` with those values. The default page size is 8.
+4. `middleware/requireAuth.middleware.js` reads the access cookie and sets `req.user.id`.
+5. `utils/taskQuery.js` builds the MongoDB filter. The user id is always part of that filter.
+6. `controllers/todo.controller.js` returns that page in `data` and the totals in `meta`.
+7. `pages/TasksPage.jsx` renders the cards and the pager. Changing a filter updates the URL, which loads the next page from the API.
+
+Creating, editing, or deleting a task also sends `X-CSRF-Token`. `services/api.js` copies that value from the readable `csrfToken` cookie. The server compares the header with the cookie. A script that sends `Authorization: Bearer <access token>` does not need the CSRF header. The login response does not hand out that token. The browser uses cookies.
+
+The dashboard does not use this paged list. `TasksContext` calls `GET /api/todo/stats` for the counts and `GET /api/todo?limit=5&sort=newest` for the recent tasks.
+
+## Run it locally
+
+You need Node.js 20 or newer, and MongoDB running locally or any MongoDB connection string.
 
 ```bash
 cd backend
@@ -76,53 +151,19 @@ cp .env.example .env
 npm install
 ```
 
-Edit `backend/.env` and replace both JWT placeholders with long, different random strings. Do not commit `.env`.
+Open `backend/.env` and replace both JWT placeholders with long, different random strings. Do not commit `.env`.
 
-## Environment variables
-
-### Backend (`backend/.env`)
-
-| Variable | Purpose |
-| --- | --- |
-| `PORT` | API port. Default `8080`. |
-| `MONGO_URI` | MongoDB connection string. |
-| `CLIENT_URL` | Frontend origin allowed by CORS. Use `http://localhost:5173` for local development. |
-| `JWT_SECRET` | Secret for 15-minute access tokens. |
-| `JWT_REFRESH_SECRET` | Different secret for 7-day refresh tokens. |
-| `NODE_ENV` | `development` or `production`. |
-| `COOKIE_SECURE` | `false` on local HTTP. `true` on HTTPS. |
-| `COOKIE_SAMESITE` | `lax` when the site and API share a site. `none` only for separate HTTPS sites. |
-
-### Frontend (`frontend/.env`)
-
-| Variable | Purpose |
-| --- | --- |
-| `VITE_API_URL` | `/api` when using the Vite dev server. Use `http://localhost:8080/api` if the built app calls the API directly. |
-
-## Database
-
-The app uses two collections: `users` and `todos`. Mongoose creates them on first use. Starting the API also creates an index on tasks for `user` and `createdAt`. That does not delete existing documents.
-
-Older tasks may not have `priority`, `status`, or `dueDate`. The API fills those in the response: priority `medium`, and status `completed` or `pending` based on the old `completed` flag. Editing the task saves the new fields.
-
-## Commands
-
-Run the API and the frontend in two terminals.
+Start the API and the site in two terminals:
 
 ```bash
-# API with restart on file changes
 cd backend
 npm run dev
 
-# API without nodemon
-npm start
-
-# Frontend
 cd frontend
 npm run dev
 ```
 
-Open `http://localhost:5173`. The dev server proxies `/api` to `http://localhost:8080`, so the browser talks to one origin and can store the cookies.
+Open `http://localhost:5173`. `npm start` in `backend` runs the API once, without restarting on file changes.
 
 ```bash
 cd frontend
@@ -134,35 +175,68 @@ cd ../backend
 npm test
 ```
 
+Backend tests use Node's test runner, Supertest, and a temporary in-memory MongoDB. They do not use `MONGO_URI`. Frontend tests use Vitest.
+
+## Environment variables
+
+### Backend (`backend/.env`)
+
+| Variable | Purpose |
+| --- | --- |
+| `PORT` | API port. Default `8080`. |
+| `MONGO_URI` | MongoDB connection string. |
+| `CLIENT_URL` | Frontend origin allowed by CORS. Use `http://localhost:5173` locally. |
+| `JWT_SECRET` | Secret for 15-minute access tokens. |
+| `JWT_REFRESH_SECRET` | A different secret for 7-day refresh tokens. |
+| `NODE_ENV` | `development` or `production`. |
+| `COOKIE_SECURE` | `false` on local HTTP. `true` on HTTPS. |
+| `COOKIE_SAMESITE` | `lax` when the site and API share a site. `none` only for separate HTTPS sites. |
+
+### Frontend (`frontend/.env`)
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_API_URL` | `/api` with the Vite dev server. Use `http://localhost:8080/api` only if a built site calls the API directly. |
+
+## Database
+
+Mongoose uses two collections, `users` and `todos`, and creates them on first use. Starting the API also creates these task indexes. That does not delete existing documents.
+
+- `user` + `createdAt` for the newest-first list
+- `user` + `status` + `priority` + `createdAt` for filtered lists
+- `user` + `dueDate` for overdue lookups
+
+Older tasks may not have `priority`, `status`, or `dueDate`. The API fills those in the response: priority `medium`, and status `completed` or `pending` from the old `completed` flag. A `medium` filter also matches a task that has no priority saved. Editing the task writes the new fields.
+
 ## API
 
-The base path is `/api`. Browser requests send cookies. State-changing browser requests also send `X-CSRF-Token`, copied from the readable `csrfToken` cookie.
+The base path is `/api`. Browser requests send cookies. Changes from the browser also send `X-CSRF-Token`.
 
-Successful task responses look like `{ success, message, data }`. Auth responses look like `{ message, user }` and do not include tokens.
+Task responses look like `{ success, message, data }`. A list also includes `meta`. Auth responses look like `{ message, user }` and do not include tokens.
 
 ### Auth
 
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
-| `POST` | `/api/auth/signup` | Public | Create an account. `name`, `email`, `password`. |
+| `POST` | `/api/auth/signup` | Public | Create an account. Body: `name`, `email`, `password`. |
 | `POST` | `/api/auth/login` | Public | Check the password and set cookies. |
 | `GET` | `/api/auth/me` | Access cookie or Bearer token | Return the current user. |
 | `POST` | `/api/auth/refresh` | Refresh cookie plus CSRF, or a refresh token in the JSON body | Rotate the session. |
 | `POST` | `/api/auth/logout` | CSRF when using cookies | Clear cookies and revoke the refresh token. |
 
-Signup and login are limited to 10 attempts per 15 minutes per IP. The limiter lives in process memory.
+Signup and login are limited to 10 attempts per 15 minutes per IP. The limiter lives in process memory and resets when the API process restarts.
 
 ### Tasks
 
-All task routes require an access cookie or `Authorization: Bearer <access token>`.
+Every task route requires an access cookie or `Authorization: Bearer <access token>`.
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/api/todo/stats` | Counts for the signed-in user: total, completed, pending, in progress, and overdue. |
-| `GET` | `/api/todo` | One page of the signed-in user's tasks. |
+| `GET` | `/api/todo/stats` | Counts for this user: total, completed, pending, in progress, and overdue. Pending means not completed, so it includes in-progress tasks. |
+| `GET` | `/api/todo` | One page of this user's tasks. |
 | `POST` | `/api/todo` | Create a task. |
-| `PUT` | `/api/todo/:id` | Update the signed-in user's task. The body may be partial. |
-| `DELETE` | `/api/todo/:id` | Delete the signed-in user's task. |
+| `PUT` | `/api/todo/:id` | Update this user's task. The body may be partial. |
+| `DELETE` | `/api/todo/:id` | Delete this user's task. |
 
 Create body:
 
@@ -178,7 +252,7 @@ Create body:
 
 `priority` is `low`, `medium`, or `high`. `status` is `pending`, `in_progress`, or `completed`. `dueDate` is `YYYY-MM-DD` or `null`. Sending `completed: true` without a status marks the task completed. Sending `completed: false` sets the status back to `pending`.
 
-List query parameters:
+List query:
 
 | Param | Default | Values |
 | --- | --- | --- |
@@ -189,13 +263,13 @@ List query parameters:
 | `page` | `1` | A page past the end returns the last page. |
 | `limit` | `8` | `1` to `50`. |
 
-`open` means not completed. `overdue` means the due date is before today and the task is still open. `medium` also matches older tasks that have no priority saved. An unknown filter returns `400`.
+`open` means not completed. `overdue` means the due date is before today and the task is still open. An unknown filter returns `400`.
 
-The list response adds `meta`: `{ page, limit, total, pageCount, start, end }`. `data` is only that page. The task list page stores `q`, `status`, `priority`, `sort`, and `page` in the URL.
+`meta` is `{ page, limit, total, pageCount, start, end }`. `data` is only that page.
 
-A missing or unknown task id for another user returns `404`, so the API does not reveal that the task exists. An invalid id returns `400`.
+A missing task, or a task that belongs to someone else, returns `404`. The API does not reveal that the other person's task exists. An id that is not a valid MongoDB id returns `400`.
 
-### Cookie session with curl
+### Try it with curl
 
 ```bash
 curl -c cookies.txt -X POST http://localhost:8080/api/auth/login \
@@ -209,62 +283,22 @@ curl -b cookies.txt -X POST http://localhost:8080/api/todo \
   -d '{"title":"Write tests","description":"Cover auth and ownership"}'
 ```
 
-A script that already has an access token can send `Authorization: Bearer <token>` and skip the CSRF header. The login response does not include that token. The supported browser flow is the cookie session.
+## Why the session is built this way
 
-## Security notes
+Passwords are bcrypt hashes and are never sent back by the API. Access tokens last 15 minutes. Refresh tokens last 7 days, are stored only as a SHA-256 hash, and are replaced on every refresh. Presenting an old refresh token revokes the session.
 
-Passwords are hashed with bcrypt and are not returned by the API. Access tokens last 15 minutes and refresh tokens last 7 days. Both are HttpOnly. The refresh token is stored only as a SHA-256 hash. Each refresh issues a new refresh token. If an old refresh token is presented again, the server revokes the session.
+The readable cookies are not the credentials. `loggedIn` only tells the interface to ask who the current user is. `csrfToken` is compared with `X-CSRF-Token` because the browser would otherwise attach the HttpOnly cookies to a request from another site. `SameSite=Lax` blocks most of those posts. In production, use HTTPS and `COOKIE_SECURE=true`. If the site and the API are on different sites, set `COOKIE_SAMESITE=none` and serve both over HTTPS. The simpler setup is one site, with the API under `/api`.
 
-The readable cookies are not credentials. `loggedIn` only tells the interface to check the session. `csrfToken` is compared with the `X-CSRF-Token` header on cookie-authenticated changes. `SameSite=Lax` blocks most cross-site posts. Use HTTPS and `COOKIE_SECURE=true` in production. If the frontend and API are on different sites, set `COOKIE_SAMESITE=none` and serve both over HTTPS. The simpler deployment is one site, with the API under `/api`.
+Signup, login, and task bodies are checked with Zod. The API does not send internal error details to the browser. React shows task text as text, not as HTML.
 
-Login failures use the same `401` message for an unknown email and a wrong password. Signup, login, and task bodies are validated with Zod. The API does not send internal error details to the client. React renders task text as text, not HTML.
+## Limits
 
-The previous version stored both tokens in `localStorage` and did not call the refresh route. JavaScript on the page could read those tokens. HttpOnly cookies remove that path. The tradeoff is that the browser attaches cookies automatically, so cookie-authenticated changes need CSRF protection. Both sides were changed together.
-
-## Testing
-
-Backend tests use Node's built-in test runner, Supertest, and a temporary in-memory MongoDB. They do not connect to `MONGO_URI`.
-
-Frontend tests use Vitest. They cover task stats, overdue rules, filtering, sorting, pagination, form validation, and the empty login form.
-
-Latest local run:
-
-- `backend`: `npm test` — 20 tests passed
-- `frontend`: `npm test` — 6 tests passed
-- `frontend`: `npm run lint` — passed
-- `frontend`: `npm run build` — passed
-
-The UI was not clicked through in a browser during this pass. The production build was produced, but the dev server flow was not exercised by hand.
-
-## Completed features
-
-- Account signup, login, logout, current user, and refresh-token rotation
-- Task create, list, update, complete toggle, and delete
-- Priority, status, due date, and overdue display
-- Dashboard counts from real tasks
-- Search, filters, sorting, and pagination in the browser
-- Validation, loading, empty, error, toast, and delete confirmation states
-- Light and dark mode
-- Ownership checks and HttpOnly cookie sessions
-
-## Known limitations
-
-- Search still scans that user's titles and descriptions with a case-insensitive match. It is fine for a personal list, and it will get slower than an indexed text search if one account stores a very large number of tasks.
-- The rate limiter resets when the API process restarts and is not shared across multiple servers.
+- Search is a case-insensitive match on that user's title and description. A personal list is fine. A very large account would want an indexed text search.
+- The rate limiter is not shared across servers, and it resets when the API process restarts.
 - There is no email verification or password reset.
 - Marking a completed task incomplete sets the status to Pending, not In Progress.
 - Dark mode is stored in this browser only.
 - There is no automated browser test of the full click path.
-
-## Interview explanation
-
-Taskboard is a small full-stack app I can walk through end to end. The interesting part is how a user stays signed in without putting tokens where page scripts can read them.
-
-I kept access tokens short, 15 minutes, and refresh tokens longer, 7 days. The refresh token is hashed in MongoDB and rotated on every refresh. Reusing an old refresh token revokes the session. Every task query includes the user id from the verified access token, so one user cannot edit another user's task by guessing an id.
-
-The hard part was cookies across the Vite app and the API. In development, Vite proxies `/api`, so the browser sees one origin and `SameSite=Lax` cookies work. Cookie requests then need a CSRF check, because the browser would otherwise send the cookie on a forged request. Bearer tokens remain available for tests and scripts that are not browsers.
-
-Search, filters, sorting, and pages run in MongoDB. The dashboard counts come from a separate aggregate, so the home page does not download every task. I would next move rate limiting to a shared store and add password reset. I would not add those until the current session and ownership rules stay covered by tests.
 
 ## License
 
